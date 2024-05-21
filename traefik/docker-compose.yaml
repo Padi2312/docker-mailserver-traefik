@@ -1,0 +1,72 @@
+services:
+  dockerproxy:
+    image: wollomatic/socket-proxy:1 # see https://github.com/wollomatic/simple-traefik for reference
+    # this image replaced https://github.com/Tecnativa/docker-socket-proxy as the socket proxy
+    # for an example with the tecnativa proxy refer tags before 2.10
+    command:
+      # with this configuration socket-proxy acts similar to the tecnativa proxy. For additional hardening
+      # please refer to the documentation of the wollomatic/socket-proxy image
+      - '-loglevel=info' # set to debug for far more logging
+      - '-allowfrom=traefik'
+      - '-listenip=0.0.0.0'
+      - '-allowGET=/v1\..{1,2}/(version|containers/.*|events.*)' # this regexp allows readonly access only for requests that traefik needs
+      - '-shutdowngracetime=5'
+      - '-watchdoginterval=600'
+      - '-stoponwatchdog'
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 64M
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    user: 65534:<<docker-gid>> # replace <<docker-gid>> with the docker gid on your host system
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-proxynet
+
+  traefik:
+    image: traefik:2.11 # always look for the most recent version
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 2G
+    cpus: 0.75
+    depends_on:
+      - dockerproxy
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./config/traefik.yaml:/etc/traefik/traefik.yaml:ro    # Static Traefik Configuration
+      - ./config/dynamic/:/etc/traefik/dynamic/:ro            # Folder to store dynamic configuration file provider
+      - ./config/authusers.txt:/etc/traefik/authusers.txt:ro  # userfile for basic auth
+      - ./config/acme/acme.json:/etc/traefik/acme.json        # certificate storage
+    user: "2000:2000" # user traefik has to be created on the host system
+                      # sudo useradd -u 2000 -M -s /usr/sbin/nologin traefik
+    labels:
+      - "traefik.enable=true"
+      
+      # expose traefik dashboard with TLS and basic auth
+      # 1. create router
+      - "traefik.http.routers.traefik.rule=Host(`traefik.example.invalid`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls.certresolver=tlschallenge"
+      - "traefik.http.routers.traefik.entrypoints=web-secure"
+      - "traefik.http.routers.traefik.middlewares=traefik-auth, secHeaders@file"
+      # 2. create basic auth middleware
+      - "traefik.http.middlewares.traefik-auth.basicauth.removeheader=true"
+      - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=/etc/traefik/authusers.txt"
+    networks:
+      - traefik-servicenet
+      - docker-proxynet
+    ports:
+      - "80:10080"  # use high ports inside the container so
+      - "443:10443" # we don't need to be root to bind the ports
+
+networks:
+  traefik-servicenet:
+    external: true           # this network has to be created once before starting:
+    name: traefik-servicenet # docker network create traefik-servicenet
+  docker-proxynet:
+    driver: bridge
+    internal: true

@@ -1,0 +1,103 @@
+services:
+  mailserver:
+    image: mailserver/docker-mailserver:13.3.1
+    restart: unless-stopped
+    hostname: mail
+    domainname: example.invalid
+    volumes:
+      - ./config:/tmp/docker-mailserver/ # Monts the configuration files of the mailserver
+      - ./data/mail:/var/mail/
+      - ./data/state:/var/mail-state/
+      - ..//traefik/config/acme/acme.json:/etc/letsencrypt/acme.json:ro
+      - /etc/localtime:/etc/localtime:ro
+    labels:
+      - "traefik.enable=true"
+      
+      # Used to generate certificates for the mailserver domain
+      - "traefik.http.routers.mailserver.entrypoints=websecure"
+      - "traefik.http.routers.mailserver.rule=Host(`mail.example.invalid`)"
+      - "traefik.http.routers.mailserver.tls=true"
+      - "traefik.http.routers.mailserver.tls.certresolver=default"
+      - "traefik.http.routers.mailserver.middlewares=secHeaders@file"
+      - "traefik.http.routers.mailserver.service=noop@internal"
+
+      - "traefik.tcp.routers.smtp.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.smtp.entrypoints=smtp"
+      - "traefik.tcp.routers.smtp.service=smtp"
+      - "traefik.tcp.services.smtp.loadbalancer.server.port=25"
+      - "traefik.tcp.services.smtp.loadbalancer.proxyProtocol.version=1"
+      
+      - "traefik.tcp.routers.smtp-ssl.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.smtp-ssl.entrypoints=smtp-ssl"
+      - "traefik.tcp.routers.smtp-ssl.tls.passthrough=true"
+      - "traefik.tcp.routers.smtp-ssl.service=smtp-ssl"
+      - "traefik.tcp.services.smtp-ssl.loadbalancer.server.port=465"
+      - "traefik.tcp.services.smtp-ssl.loadbalancer.proxyProtocol.version=1"
+
+      - "traefik.tcp.routers.smtp-tls.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.smtp-tls.entrypoints=smtp-tls"
+      - "traefik.tcp.routers.smtp-tls=true"
+      - "traefik.tcp.routers.smtp-tls.service=smtp-tls"
+      - "traefik.tcp.services.smtp-tls.loadbalancer.server.port=587"
+      - "traefik.tcp.services.smtp-tls.loadbalancer.proxyProtocol.version=1"
+      
+
+      - "traefik.tcp.routers.imap-ssl.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.imap-ssl.entrypoints=imap-ssl"
+      - "traefik.tcp.routers.imap-ssl.service=imap-ssl"
+      - "traefik.tcp.routers.imap-ssl.tls.passthrough=true"
+      - "traefik.tcp.services.imap-ssl.loadbalancer.server.port=10993"
+      - "traefik.tcp.services.imap-ssl.loadbalancer.proxyProtocol.version=2"
+
+      - "traefik.tcp.routers.sieve.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.sieve.entrypoints=sieve"
+      - "traefik.tcp.routers.sieve.service=sieve"
+      - "traefik.tcp.services.sieve.loadbalancer.server.port=4190"
+    environment:
+      - SSL_TYPE=letsencrypt # enable SSL on the mailserver
+      - SSL_DOMAIN=example.invalid 
+      - PERMIT_DOCKER=host
+      - ENABLE_SPAMASSASSIN=1
+      - ENABLE_CLAMAV=1
+      - ENABLE_FAIL2BAN=1
+      - DMS_DEBUG=1
+      - LOG_LEVEL=info
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - default
+      - traefik-servicenet
+
+  # Optional email webclient 
+  # You can also use your own webmail client like Outlook, Thunderbird, etc.
+  webmail:
+    image: roundcube/roundcubemail:1.6.6-apache
+    restart: unless-stopped
+    depends_on:
+      - mailserver
+    volumes:
+      - ./webmail:/var/roundcube/db
+    environment:
+      - ROUNDCUBEMAIL_DB_TYPE=sqlite
+      - ROUNDCUBEMAIL_DEFAULT_HOST=ssl://mail.example.invalid
+      - ROUNDCUBEMAIL_DEFAULT_PORT=993
+      - ROUNDCUBEMAIL_SMTP_SERVER=tls://mail.example.invalid
+      - ROUNDCUBEMAIL_SMTP_PORT=587
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webmail.entrypoints=websecure"
+      - "traefik.http.routers.webmail.rule=Host(`webmail.example.invalid`)" #Domain anpassen
+      - "traefik.http.routers.webmail.tls=true"
+      - "traefik.http.routers.webmail.tls.certresolver=default"
+      - "traefik.http.routers.webmail.middlewares=secHeaders@file"
+      - "traefik.http.services.webmail-service.loadbalancer.server.port=80"
+    networks:
+      - default
+      - traefik-servicenet
+
+
+networks:
+  default:
+  traefik-servicenet:
+    name: traefik-servicenet
+    external: true
