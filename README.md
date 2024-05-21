@@ -11,6 +11,8 @@ Docker-Compose setup for running a mailserver with Traefik as a reverse proxy.
 
 # Table of Contents
 
+- [Docker Mailserver + Traefik](#docker-mailserver--traefik)
+- [Table of Contents](#table-of-contents)
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
@@ -21,6 +23,8 @@ Docker-Compose setup for running a mailserver with Traefik as a reverse proxy.
       - [`mailserver/config/postfix-master.cf` - Postfix master configuration](#mailserverconfigpostfix-mastercf---postfix-master-configuration)
       - [`mailserver/config/dovecot/dovecot.conf` - Dovecot configuration](#mailserverconfigdovecotdovecotconf---dovecot-configuration)
   - [DNS Configuration](#dns-configuration)
+    - [DKIM Configuration](#dkim-configuration)
+- [Test your setup](#test-your-setup)
 - [`mailsetup.sh`](#mailsetupsh)
 - [License](#license)
 - [References](#references)
@@ -267,6 +271,23 @@ After editing it should look like this:
 ```txt
 v=DKIM1; h=sha256; k=rsa; p=Dmdklfi3o489DJKDdloeu4397dnDFJRdkejnslsdfllsdf343499834...
 ```
+
+# Test your setup
+
+After setup, you can test the mailserver by sending an email to the domain and checking if it arrives in the mailbox.
+
+One useful tool for testing the mailserver is [MX Toolbox](https://mxtoolbox.com/SuperTool.aspx). It will give you a set of tools to test the mailserver configuration.
+
+- **MX Lookup** - Enter the domain and it will show you the MX records of the domain
+- **Test Email Server** - Enter the domain and it will test the mailserver configuration
+- **DKIM Lookup** - Enter the domain and it will show you the DKIM records of the domain
+- **SPF Lookup** - Enter the domain and it will show you the SPF records of the domain
+- **DMARC Lookup** - Enter the domain and it will show you the DMARC records of the domain
+
+> [!TIP]
+> It's also worth checking your domain to see if it's blacklisted. You can do this by entering the domain in the **Blacklist Check** tool.
+>
+> There are plenty of other tools on the website that can help you test your mailserver configuration.
 
 # `mailsetup.sh`
 
