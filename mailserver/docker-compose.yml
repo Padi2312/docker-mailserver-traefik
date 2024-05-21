@@ -8,7 +8,7 @@ services:
       - ./config:/tmp/docker-mailserver/ # Monts the configuration files of the mailserver
       - ./data/mail:/var/mail/
       - ./data/state:/var/mail-state/
-      - ..//traefik/config/acme/acme.json:/etc/letsencrypt/acme.json:ro
+      - ../traefik/config/acme/acme.json:/etc/letsencrypt/acme.json:ro
       - /etc/localtime:/etc/localtime:ro
     labels:
       - "traefik.enable=true"
